@@ -1,0 +1,84 @@
+import requests
+import json
+import Flask
+import openai
+import io
+import os
+import Dict, Any, List, Optional
+
+app = Flask(__name__)
+openai.api_key = os.environ["OPENAI_API_KEY"]
+
+def OpenAIStream(text: str) -> io.BytesIO:
+    return io.BytesIO(text.encode())
+
+def search_school(api_key, school_name):
+    base_url = 'https://api.data.gov/ed/collegescorecard/v1'
+    endpoint = 'schools'
+    params = {'api_key': api_key, 'school.name': school_name}
+
+    response = requests.get(f'{base_url}{endpoint}', params=params)
+
+    if response.status_code == 200:
+        data = response.json()
+        results = data.get('results')
+
+        if results:
+            location_info = results[0].get('location')
+            if location_info:
+                latitude = location_info.get('lat')
+                longitude = location_info.get('lon')
+                print(f"Latitude: {latitude}")
+                print(f"Longitude: {longitude}")
+
+            latest_info = results[0].get('latest')
+            if latest_info:
+                school_info = latest_info.get('school')
+                if school_info:
+                    school_data = {
+                        'name': school_info.get('name'),
+                        'zip_code': school_info.get('zip'),
+                        'city': school_info.get('city'),
+                        'state': school_info.get('state'),
+                        'address': school_info.get('address'),
+                        'school_url': school_info.get('school_url'),
+                        'online_only': 'Yes' if school_info.get('online_only') == 1 else 'No',
+                        'booksupply_cost': cost_info.get('booksupply') if cost_info else None,
+                        'in_state_tuition': tuition_info.get('in_state') if tuition_info else None,
+                        'out_of_state_tuition': tuition_info.get('out_of_state') if tuition_info else None,
+                    }
+
+                    # Generate description
+                    initial_prompt = {
+                        "role": "system",
+                        "content": "You are a helpful admission counselor who does not reference itself and gives students a one minute read description of their college."
+                    }
+
+                    messages_with_prompt = [initial_prompt]
+                    messages_with_prompt.append({'role': 'user', 'content': f"Tell me about {school_data['name']} in one minute."})
+
+                    response = openai.ChatCompletion.create(
+                        model="gpt-4",
+                        messages=messages_with_prompt,
+                        stream=True,
+                    )
+
+                    stream = OpenAIStream("")
+                    for chunk in response:
+                        stream.write(chunk["choices"][0]["delta"].get("content", "").encode())
+
+                    return StreamingTextResponse(stream, as_attachment=True)
+
+        else:
+            print(f"No results found for '{school_name}'.")
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+
+@app.route("/api/short_description", methods=["POST"])
+def short_description():
+    school_name = request.form['school_name']
+    api_key = 'kK3BZnAbjkyuoZuB4BW2VapEPB7Z0giWOkm8uKb4'
+    return search_school(api_key, school_name)
+
+if __name__ == "__main__":
+    app.run(debug=True)
