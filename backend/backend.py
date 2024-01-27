@@ -1,6 +1,5 @@
 import requests
-#ENSURE YOU HAVE THE REQUESTS MODULE INSTALLED
-#In CMD: pip install requests
+
 def search_school(api_key, school_name):
     base_url = 'https://api.data.gov/ed/collegescorecard/v1/'
     endpoint = 'schools'
